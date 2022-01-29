@@ -8,16 +8,30 @@
 #define SUCCESS 0;
 
 struct queue {
-	void* front; 
-	void* end;
+	int front; 
+	int end;
 	void** data; 
 	int length; 
-	// actual value would be an array* 
-	// dataList: void* listName[]
-	// splitList: char* splitList[]
-	// data type void
-	// int length 
+	
 };
+
+/*
+front and back are indexes 
+front of the space = data[front] 
+back of the space = data[back]
+
+enqueue: 
+If there is no data, malloc for one element, 
+Front and back = 0; 
+If there is data, realloc for back + 1 element, back = back + 1
+
+dequeue: 
+If there is data, we just move the pointers, front = front + 1
+If there is only one item left, (length == 1), return the value 
+Front and back = NULL, free(queue->data), queue->data = NULL 
+
+
+*/
 
 queue_t queue_create(void)
 {
@@ -42,15 +56,20 @@ int queue_destroy(queue_t queue)
 
 }
 
-int queue_enqueue(queue_t queue, void *data)
+int queue_enqueue(queue_t queue, void *data)    // 
 {
+	
+	if (queue->data == NULL) 
+		queue->data = (void**) malloc(sizeof(void*)); 
+	else 
+		queue->data = (void**) realloc(queue->data, queue->end + 1);
 	
 	return -1;
 }
 
 int queue_dequeue(queue_t queue, void **data)
 {
-	/* TODO */
+    
 	return -1;
 }
 
