@@ -4,10 +4,14 @@
 
 #include "queue.h"
 
+#define ERROR -1;
+#define SUCCESS 0;
 
 struct queue {
-	// void* front; 
-	// void* end;
+	void* front; 
+	void* end;
+	void** data; 
+	int length; 
 	// actual value would be an array* 
 	// dataList: void* listName[]
 	// splitList: char* splitList[]
@@ -17,30 +21,30 @@ struct queue {
 
 queue_t queue_create(void)
 {
-	/* TODO */
-	// we create the queue and allocate memory here theQueue
-	// theQueue->front = theQueue
-	// rest of the values would be none.
-	// return theQueue
-	// struct queue *queueName = malloc(sizeof *queueName);
-	// queue_t is the same as (queue*)
-	// queue_t myqueue = (queue_t) malloc(sizeof(queue))
-	return NULL;
+	// struct queue *myQueue = malloc(sizeof(*queue_t));
+	queue_t myQueue = (queue_t) malloc(sizeof(struct queue));
+	myQueue->front = NULL; 
+	myQueue->end = NULL; 
+	myQueue->data = NULL; 
+	myQueue->length = 0; 
+	
+	return myQueue;
 }
 
 int queue_destroy(queue_t queue)
 {
+	if (queue->length > 0 || queue == NULL)
+		return ERROR;
+	
+	free(queue);
+	
+	return SUCCESS; 
 
-	//if length of queue is > 0 raise error :it shoudlnt run
-	//else free(queue)
-
-	/* TODO */
-	return -1;
 }
 
 int queue_enqueue(queue_t queue, void *data)
 {
-	/* TODO */
+	
 	return -1;
 }
 
@@ -64,7 +68,6 @@ int queue_iterate(queue_t queue, queue_func_t func, void *arg, void **data)
 
 int queue_length(queue_t queue)
 {
-	/* TODO */
-	return -1;
+	return queue->length;
 }
 
