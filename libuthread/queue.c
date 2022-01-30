@@ -58,18 +58,41 @@ int queue_destroy(queue_t queue)
 
 int queue_enqueue(queue_t queue, void *data)    // 
 {
-	
-	if (queue->data == NULL) 
+	if (queue == NULL || data == NULL) 
+		return -1;
+	 
+	if (queue->data == NULL) {
 		queue->data = (void**) malloc(sizeof(void*)); 
-	else 
-		queue->data = (void**) realloc(queue->data, queue->end + 1);
+		queue->front = 0; 
+		queue->end = 0;
+		queue->data[0] = data;
+		queue->length = 1; 
+	} else {
+		queue->end = queue->end + 1;
+		queue->data = (void**) realloc(queue->data, queue->end);
+		queue->data[queue->end] = data;
+		queue->length = queue->length + 1;  
+	}
 	
-	return -1;
+	return 0;
 }
 
 int queue_dequeue(queue_t queue, void **data)
 {
-    
+	if (queue == NULL || data == NULL) 
+		return -1;
+
+    *data = queue->data[queue->front]; 
+	queue->front = queue->front + 1; 
+	queue->length = queue->length - 1;
+	
+	if (queue->length = 0) {
+		free(queue->data); 
+		queue->data = NULL;
+		queue->front = 0; 
+		queue->end = 0; 
+	}
+
 	return -1;
 }
 
