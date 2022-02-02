@@ -1,10 +1,12 @@
 # Target library
 target := libuthread.a
-objs:= prempt.o queue.o uthread.o 
+objs:= queue.o 
 # Flags
 CC  := gcc
 CFLAGS := -Wall -Wextra -Werror -MMD
 CFLAGS += -g 
+AR  := ar rcs 
+
 
 ifneq ($(V),1)
 Q = @
@@ -19,8 +21,8 @@ deps := $(patsubst %.o,%.d,$(objs))
 all: $(target)
 
 $(target): $(objs) 
-	@echo "CC	$@"
-	$(Q)$(CC) -o $@ $< 
+	@echo "AR	$@"
+	$(Q)$(AR) $@ $(objs)
 
 %.o: %.c
 	@echo "CC	$@"

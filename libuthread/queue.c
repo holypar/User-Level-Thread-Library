@@ -81,11 +81,18 @@ int queue_dequeue(queue_t queue, void **data)
 	if (queue == NULL || data == NULL || queue->length == 0) 
 		return -1;
 	
+	/* Saving the next node */
 	struct node* nextNode = queue->front->next; 
+
+	/* Setting the data, free the data and set the pointer */
+	*data = queue->front->data; 
 	free(queue->front); 
 	queue->front = nextNode; 
-	nextNode->prev = NULL; 
 	
+	/* Set the next node's previous pointer */
+	if (nextNode != NULL)
+		nextNode->prev = NULL; 
+	queue->length = queue->length - 1;
 	return SUCCESS;
 }
 
@@ -108,6 +115,7 @@ int queue_delete(queue_t queue, void *data)
 			nextNode->prev = prevNode; 
 			/* Free the memory */
 			free(currentNode); 
+			queue->length = queue->length - 1;
 		}
 		/* Iterate through the linked list */
 		currentNode = currentNode->next; 
