@@ -104,15 +104,21 @@ int queue_delete(queue_t queue, void *data)
 
 	struct node* currentNode; 
 	currentNode = queue->front; 
-	
+	// [... 5, 42, 7, ....]
+	// prevnode = 5
+	//
 	while(currentNode != NULL) {
 		if (currentNode->data == data) {
 			/* Save the next and previous nodes */
 			struct node* prevNode = currentNode->prev; 
 			struct node* nextNode = currentNode->next;  
-			/* Reset the pointers */
-			prevNode->next = nextNode; 
-			nextNode->prev = prevNode; 
+			
+			/* If it is not the first item, reattach the pointer */
+			if (prevNode != NULL) 
+				prevNode->next = nextNode; 
+			/* If it is not the last item reattach the pointer*/
+			if (nextNode != NULL)
+				nextNode->prev = prevNode; 
 			/* Free the memory */
 			free(currentNode); 
 			queue->length = queue->length - 1;
@@ -135,7 +141,7 @@ int queue_iterate(queue_t queue, queue_func_t func, void *arg, void **data)
 	currentNode = queue->front;
 
 	while(currentNode != NULL) {
-
+		
 		/* Running the callback function and getting return value */
 		int returnValue = func(queue, currentNode->data, arg);
 
@@ -144,6 +150,7 @@ int queue_iterate(queue_t queue, queue_func_t func, void *arg, void **data)
 			*data = currentNode->data; 
 			break; 
 		}
+		currentNode = currentNode->next;
 	}
 	
 	return SUCCESS;
