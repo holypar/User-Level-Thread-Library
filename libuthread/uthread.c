@@ -22,36 +22,44 @@ struct thread {
 	int state; 
 }; 
 
+
 struct scheduler {
-	queue_t readyQueue; 
-	queue_t blockQueue; 
-	queue_t zombieQueue; 
-	int activeThreadId;
+	int threadCounter; 
+	queue_t readyQueue;  
+	struct thread* activeThread; 
 };
+
+struct scheduler scheduler;
 
 int uthread_start(int preempt)
 {
 	
 	queue_t readyQueue = queue_create();
-	queue_t blockQueue = queue_create();
-	queue_t zombieQueue = queue_create();
-	struct scheduler* scheduler = malloc(sizeof( struct scheduler)); 
 	
-	scheduler->readyQueue = readyQueue;
-	scheduler->blockQueue = blockQueue;
-	scheduler->zombieQueue = zombieQueue;
-	
+	scheduler.readyQueue = readyQueue;
+	scheduler.threadCounter = 1; 
 	/*Creation of main thread */
 	struct thread* mainThread = malloc(sizeof(struct thread)); 
-	mainThread->tid = 0;
-	scheduler->activeThreadId = mainThread->tid;
+	mainThread->tid = scheduler.threadCounter - 1;
+	scheduler.activeThread = mainThread;
 
-	/* TODO */
 	return -1;
 }
 
 int uthread_stop(void)
-{
+{	
+	if(queue_length(scheduler.readyQueue) == 0 && scheduler.activeThread->tid == 0){
+
+		/* Free the current thread */
+		free(scheduler.activeThread->context); 
+		uthread_ctx_destroy_stack(scheduler.activeThread->stackPointer); 
+		free(scheduler.activeThread); 
+
+		/* Free the ready queue */
+		queue_destroy(scheduler.readyQueue); 
+		
+		return 0;
+	}
 	
 	/* TODO */
 	return -1;
@@ -59,38 +67,44 @@ int uthread_stop(void)
 
 int uthread_create(uthread_func_t func)
 {
+	/* Creates new thread */
 	struct thread* newThread = malloc(sizeof(struct thread));   
 	void* topOfStack = uthread_ctx_alloc_stack();
 	newThread->stackPointer = topOfStack;
-	// if there are no zombie process then we can create a new thread only. https://www.geeksforgeeks.org/zombie-processes-prevention/
-	/* once that if statement is checked you can now create a new thread and make its its threadid = activeThreadId++
-	initilize context 
-	return the id.
-	*/
-	struct scheduler* scheduler = malloc(sizeof( struct scheduler));     //i think i need to make this struct global cause im pretty sure the scheduler is empty here again cause its fresh memory.
+	scheduler.threadCounter = scheduler.threadCounter + 1; 
+	newThread->tid = scheduler.threadCounter - 1; 
 
-	if (queue_length(scheduler->zombieQueue == 0)){
-		newThread->tid = scheduler->activeThreadId++;
-		uthread_ctx_t* context = malloc(sizeof(uthread_ctx_t));
-		uthread_ctx_init(context,newThread->stackPointer,func);	
-		queue_enqueue(scheduler->readyQueue,newThread);  //adds the new created thread to the ready queue
-		return newThread->tid;
+	uthread_ctx_t* context = malloc(sizeof(uthread_ctx_t));
+	uthread_ctx_init(context, newThread->stackPointer, func);
+	newThread->context = context; 
+	newThread->state = READY_STATE; 
 
-	}
+	/* Enqueues the thread to the ready queue */
+	queue_enqueue(scheduler.readyQueue, newThread);  
+	
+	return newThread->tid;
 
-
-	return -1;
+	/* TODO Handle Errors */
 }
 
 void uthread_yield(void)
 {
+	
+	/* If the ready queue is not empty, push the current thread to the back of the queue and resume the next ready thread */
+	if (queue_length(scheduler.readyQueue) != 0) {
+		void* nextThread;
+		queue_dequeue(scheduler.readyQueue, (void**)&nextThread);
+		queue_enqueue(scheduler.readyQueue, scheduler.activeThread); 
+		uthread_ctx_switch(scheduler.activeThread, nextThread); 
+		scheduler.activeThread = nextThread; 
+	} 
+
 	/* TODO */
 }
 
 uthread_t uthread_self(void)
 {
-	/* TODO */
-	return -1;
+	return scheduler.activeThread->tid;
 }
 
 void uthread_exit(int retval)
