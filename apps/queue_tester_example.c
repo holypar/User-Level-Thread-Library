@@ -59,6 +59,83 @@ void test_queue_difficult(void)
 	queue_destroy(q); 
 }
 
+void test_queue_moderate(void) {
+	int data1 = 1; 
+	int data2 = 2; 
+	int data3 = 3; 
+	int *ptr; 
+	queue_t q; 
+
+	fprintf(stderr, "*** TEST queue_moderate ***\n");
+	q = queue_create();
+
+	queue_enqueue(q, &data1);
+	queue_enqueue(q, &data2);
+	queue_dequeue(q, (void**)&ptr);
+	TEST_ASSERT(ptr == &data1);
+	queue_enqueue(q, &data3); 
+	queue_dequeue(q, (void**)&ptr);
+	TEST_ASSERT(ptr == &data2);
+	queue_dequeue(q, (void**)&ptr);
+	TEST_ASSERT(ptr == &data3);
+	queue_destroy(q); 
+}
+
+void test_queue_destroy_errors() {
+	int data1 = 1;
+	int *ptr;
+	queue_t q;
+
+	fprintf(stderr, "*** TEST queue_destroy_errors ***\n");
+	q = queue_create();
+	queue_enqueue(q, &data1);
+	TEST_ASSERT(queue_length(q) == 1); 
+
+	int result1 = queue_destroy(q); 
+	TEST_ASSERT(result1 == -1); 
+
+	queue_dequeue(q, (void**)&ptr);
+
+	int result2 = queue_destroy(q);
+	TEST_ASSERT(result2 == 0); 
+
+}
+
+void queue_enqueue_errors(void) {
+	queue_t q = NULL;
+	
+	fprintf(stderr, "*** TEST queue_enqueue_errors ***\n");
+	q = queue_create();
+	int result = queue_enqueue(q, NULL); 
+	TEST_ASSERT(result == -1); 
+	TEST_ASSERT(queue_length(q) == 0);
+	queue_destroy(q); 
+}
+
+void queue_dequeue_errors(void) {
+	queue_t q = NULL;
+	int data1 = 1;
+	int *ptr;
+
+	fprintf(stderr, "*** TEST queue_dequeue_errors ***\n");
+	q = queue_create();
+	int result1 = queue_dequeue(q, (void**)&ptr); 
+	TEST_ASSERT(result1 == -1); 
+	TEST_ASSERT(queue_length(q) == 0);
+
+	queue_enqueue(q, &data1);
+	TEST_ASSERT(queue_length(q) == 1); 
+
+	int result2 = queue_dequeue(q, NULL);
+	TEST_ASSERT(result2 == -1); 
+
+	int result3 = queue_dequeue(q, (void**)&ptr);
+	TEST_ASSERT(result3 == 0);
+	TEST_ASSERT(queue_length(q) == 0); 
+	queue_destroy(q);
+
+}
+
 
 static int inc_item(queue_t q, void *data, void *arg)
 {
@@ -117,6 +194,9 @@ int main(void)
 	test_create();
 	test_queue_simple();
 	test_queue_difficult();
-	test_iterator(); 
+	test_queue_moderate(); 
+	test_queue_destroy_errors(); 
+	queue_enqueue_errors(); 
+	queue_dequeue_errors(); 
 	return 0;
 }
