@@ -22,6 +22,7 @@ struct thread {
 	uthread_ctx_t* context;
 	void* stackPointer; 
 	int state; 
+	int returnValue; 
 }; 
 
 struct scheduler {
@@ -46,6 +47,7 @@ int uthread_start(int preempt)
 	/*Creation of main thread */
 	struct thread* mainThread = malloc(sizeof(struct thread)); 
 	mainThread->tid = scheduler.threadCounter - 1;
+	mainThread->state = ACTIVE_STATE; 
 	scheduler.activeThread = mainThread;
 
 	return SUCCESS;
@@ -93,6 +95,7 @@ int uthread_create(uthread_func_t func)
 	uthread_ctx_init(context, newThread->stackPointer, func);
 	newThread->context = context; 
 	newThread->state = READY_STATE; 
+	newThread->returnValue = NULL; 
 
 	/* Enqueues the thread to the ready queue */
 	queue_enqueue(scheduler.readyQueue, newThread);  
@@ -103,16 +106,22 @@ int uthread_create(uthread_func_t func)
 
 void uthread_yield(void)
 {
-	
-	/* If the ready queue is not empty, push the current thread to the back of the queue and resume the next ready thread */
+	if (scheduler.activeThread->state == ZOMBIE_STATE) 
+		queue_enqueue(scheduler.zombieQueue, scheduler.activeThread); 
+
 	if (queue_length(scheduler.readyQueue) != 0) {
 		/* Dequeue the thread from the ready queue as the next thread */
 		struct thread* nextThread;
+		 
 		queue_dequeue(scheduler.readyQueue, &nextThread);
+		nextThread->state = ACTIVE_STATE;
 
 		/* Enqueue the current active thread to the back of the queue */
-		queue_enqueue(scheduler.readyQueue, scheduler.activeThread); 
-
+		if (scheduler.activeThread->state != ZOMBIE_STATE) {
+			scheduler.activeThread->state = READY_STATE; 
+			queue_enqueue(scheduler.readyQueue, scheduler.activeThread); 
+		} 
+		
 		/* Context switches the context */
 		uthread_ctx_switch(scheduler.activeThread->context, nextThread->context); 
 		scheduler.activeThread = nextThread; 
@@ -127,10 +136,15 @@ uthread_t uthread_self(void)
 
 void uthread_exit(int retval)
 {
-	scheduler.activeThread->state = ZOMBIE_STATE; 
-	//enque the active thread into the zombiequeue
-	//save return value somehow 
-	
+
+	if (scheduler.activeThread->state == ACTIVE_STATE) {
+		
+		scheduler.activeThread->state = ZOMBIE_STATE;
+
+		scheduler.activeThread->returnValue = retval; 
+		uthread_yield(); 
+	}
+	 
 }
 
 int uthread_join(uthread_t tid, int *retval)
@@ -140,9 +154,9 @@ int uthread_join(uthread_t tid, int *retval)
 	// Decide whether to use a zombie queue or a zombie state 
  	while(1)
 	{
-		if (scheduler.activeThread->state == ZOMBIE_STATE) 
+		if (queue_length(scheduler.readyQueue) == 0) 
 			break; 
-		
+		uthread_yield(); 
 	}
 	
 	return -1;
