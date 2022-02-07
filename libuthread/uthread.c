@@ -29,6 +29,7 @@ struct scheduler {
 	int threadCounter; 
 	queue_t readyQueue;  
 	queue_t zombieQueue; 
+	queue_t blockQueue; 
 	struct thread* activeThread; 
 };
 
@@ -39,15 +40,18 @@ int uthread_start(int preempt)
 	/* Initialize the queue */
 	queue_t readyQueue = queue_create();
 	queue_t zombieQueue = queue_create(); 
+	queue_t blockQueue = queue_create(); 
 
 	scheduler.readyQueue = readyQueue;
 	scheduler.zombieQueue = zombieQueue; 
+	scheduler.blockQueue = blockQueue; 
 	scheduler.threadCounter = 1; 
 
 	/*Creation of main thread */
 	struct thread* mainThread = malloc(sizeof(struct thread)); 
 	mainThread->tid = scheduler.threadCounter - 1;
 	mainThread->state = ACTIVE_STATE; 
+	mainThread->returnValue = NULL; 
 	scheduler.activeThread = mainThread;
 
 	return SUCCESS;
@@ -62,8 +66,10 @@ int uthread_stop(void)
 		uthread_ctx_destroy_stack(scheduler.activeThread->stackPointer); 
 		free(scheduler.activeThread); 
 
-		/* Free the ready queue */
+		/* Free the queues */
 		queue_destroy(scheduler.readyQueue); 
+		queue_destroy(scheduler.blockQueue);
+		queue_destroy(scheduler.zombieQueue);
 		
 		return SUCCESS;
 	}
@@ -96,7 +102,7 @@ int uthread_create(uthread_func_t func)
 	newThread->context = context; 
 	newThread->state = READY_STATE; 
 	newThread->returnValue = NULL; 
-
+	
 	/* Enqueues the thread to the ready queue */
 	queue_enqueue(scheduler.readyQueue, newThread);  
 	
@@ -106,6 +112,7 @@ int uthread_create(uthread_func_t func)
 
 void uthread_yield(void)
 {
+	
 	if (scheduler.activeThread->state == ZOMBIE_STATE) 
 		queue_enqueue(scheduler.zombieQueue, scheduler.activeThread); 
 
@@ -123,8 +130,11 @@ void uthread_yield(void)
 		} 
 		
 		/* Context switches the context */
-		uthread_ctx_switch(scheduler.activeThread->context, nextThread->context); 
+		struct thread* activeThread = scheduler.activeThread; 
 		scheduler.activeThread = nextThread; 
+
+		uthread_ctx_switch(activeThread->context, nextThread->context); 
+		 
 	} 
 
 }
@@ -147,18 +157,29 @@ void uthread_exit(int retval)
 	 
 }
 
+
 int uthread_join(uthread_t tid, int *retval)
 {
-	/* TODO */
-	// Understand how to get the return value 
-	// Decide whether to use a zombie queue or a zombie state 
- 	while(1)
+	// main calls the threadjoin -> we see oh okay the tid is in readyqueue ;
+	uthread_yield(); 
+	while(1) 
 	{
-		if (queue_length(scheduler.readyQueue) == 0) 
-			break; 
+
+		//is the ready queue -> we block ourself we wait until our tid is in the zombie queue so we can delete it
+		//or its zombie queue 
+
+		// Checks if it is in the zombie queue 
+		// If it is, break 
 		uthread_yield(); 
 	}
+	// It is in the zombie queue 
+	/*
+		Iterate through queue and get the data
+		Save the return value 
+		Unblock the parent 
+		Delete the node in the zombie queue 
+		uthread_yield(); 
+	*/
 	
 	return -1;
 }
-

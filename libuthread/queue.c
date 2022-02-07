@@ -104,9 +104,7 @@ int queue_delete(queue_t queue, void *data)
 
 	struct node* currentNode; 
 	currentNode = queue->front; 
-	// [... 5, 42, 7, ....]
-	// prevnode = 5
-	//
+
 	while(currentNode != NULL) {
 		if (currentNode->data == data) {
 			/* Save the next and previous nodes */
@@ -119,9 +117,19 @@ int queue_delete(queue_t queue, void *data)
 			/* If it is not the last item reattach the pointer*/
 			if (nextNode != NULL)
 				nextNode->prev = prevNode; 
+			
+			/* If it is the first item reattach the front pointer */
+			if (currentNode == queue->front) 
+				queue->front = nextNode; 
+			
+			/* If it is the last item reattach the end pointer */
+			if (currentNode == queue->end) 
+				queue->end = prevNode;
+			
 			/* Free the memory */
 			free(currentNode); 
 			queue->length = queue->length - 1;
+			break; 
 		}
 		/* Iterate through the linked list */
 		currentNode = currentNode->next; 
@@ -133,7 +141,7 @@ int queue_delete(queue_t queue, void *data)
 int queue_iterate(queue_t queue, queue_func_t func, void *arg, void **data)
 {
 
-	if (queue == NULL || func == NULL) 
+	if (queue == NULL || func == NULL || queue->length == 0) 
 		return ERROR; 
 
 	/* Creating node */

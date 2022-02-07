@@ -37,8 +37,10 @@ void test_queue_simple(void)
 	TEST_ASSERT(ptr == &data);
 }
 
+/* Enqueue/Dequeue Difficult */
 void test_queue_difficult(void) 
 {
+	/* Enqueues 3 data, and then dequeues  */
 	int data1 = 1; 
 	int data2 = 2; 
 	int data3 = 3; 
@@ -59,6 +61,7 @@ void test_queue_difficult(void)
 	queue_destroy(q); 
 }
 
+/* Enqueue/Dequeue Moderate */
 void test_queue_moderate(void) {
 	int data1 = 1; 
 	int data2 = 2; 
@@ -81,6 +84,7 @@ void test_queue_moderate(void) {
 	queue_destroy(q); 
 }
 
+/* Enqueue/Dequeue Destroy Errors*/
 void test_queue_destroy_errors() {
 	int data1 = 1;
 	int *ptr;
@@ -101,23 +105,28 @@ void test_queue_destroy_errors() {
 
 }
 
-void queue_enqueue_errors(void) {
+/* Testing Enqueue Errors */
+void test_queue_enqueue_errors(void) {
 	queue_t q = NULL;
 	
 	fprintf(stderr, "*** TEST queue_enqueue_errors ***\n");
 	q = queue_create();
+
+	/* Testing to enqueue nothing*/
 	int result = queue_enqueue(q, NULL); 
 	TEST_ASSERT(result == -1); 
 	TEST_ASSERT(queue_length(q) == 0);
 	queue_destroy(q); 
 }
 
-void queue_dequeue_errors(void) {
+/* Testing Dequeue Errors */
+void test_queue_dequeue_errors(void) {
 	queue_t q = NULL;
 	int data1 = 1;
 	int *ptr;
 
 	fprintf(stderr, "*** TEST queue_dequeue_errors ***\n");
+	/* Testing dequeue if nothing is inside */
 	q = queue_create();
 	int result1 = queue_dequeue(q, (void**)&ptr); 
 	TEST_ASSERT(result1 == -1); 
@@ -126,16 +135,93 @@ void queue_dequeue_errors(void) {
 	queue_enqueue(q, &data1);
 	TEST_ASSERT(queue_length(q) == 1); 
 
+	/* Testing dequeue if data I passed is a null*/
 	int result2 = queue_dequeue(q, NULL);
 	TEST_ASSERT(result2 == -1); 
 
+	/* Testing normal dequeue */
 	int result3 = queue_dequeue(q, (void**)&ptr);
 	TEST_ASSERT(result3 == 0);
 	TEST_ASSERT(queue_length(q) == 0); 
 	queue_destroy(q);
-
 }
 
+
+/* Testing delete function */
+void test_queue_delete(void) {
+	queue_t q = NULL;
+	int data1 = 1;
+	int data2 = 2;
+	int data3 = 3;
+	int *ptr;
+
+	fprintf(stderr, "*** TEST queue_delete ***\n");
+	q = queue_create();
+	queue_enqueue(q,&data1);
+	queue_enqueue(q,&data2);
+	queue_enqueue(q,&data3);
+	queue_delete(q,&data2);
+	queue_dequeue(q, (void**)&ptr); 
+	TEST_ASSERT(ptr == &data1); 
+	queue_dequeue(q, (void**)&ptr); 
+	TEST_ASSERT(ptr == &data3); 
+	queue_destroy(q); 
+}
+
+/* Testing delete function with duplicates */
+void test_queue_delete_duplicates(void) {
+	queue_t q = NULL;
+	int data1 = 1;
+	int data2 = 2;
+	int data3 = 3;
+	int *ptr;
+
+	fprintf(stderr, "*** TEST queue_delete duplicate ***\n");
+	q = queue_create();
+	queue_enqueue(q,&data1);
+	queue_enqueue(q,&data2);
+	queue_enqueue(q,&data3);
+	queue_enqueue(q,&data1);
+	
+	queue_delete(q,&data1);
+	queue_dequeue(q, (void**)&ptr); 
+	TEST_ASSERT(ptr == &data2); 
+
+	queue_dequeue(q, (void**)&ptr); 
+	queue_dequeue(q, (void**)&ptr); 
+	queue_destroy(q); 
+}
+
+/* Testing delete function with errors */
+void test_queue_delete_errors(void) {
+	queue_t q = NULL;
+	
+	fprintf(stderr, "*** TEST queue_delete_errors ***\n");
+	q = queue_create();
+
+	/* Testing to delete with NULL */
+	int result = queue_delete(q, NULL); 
+	TEST_ASSERT(result == -1); 
+	TEST_ASSERT(queue_length(q) == 0);
+	queue_destroy(q); 
+}
+
+void test_queue_delete_nothing(void) {
+	queue_t q = NULL;
+	int data1 = 1; 
+	int data2 = 2; 
+	int* ptr; 
+
+	/* Testing to delete something else */
+	fprintf(stderr, "*** TEST queue_delete_nothing ***\n");
+	q = queue_create();
+	queue_enqueue(q, &data1); 
+	queue_delete(q, &data2); 
+	queue_dequeue(q, (void**)&ptr); 
+	TEST_ASSERT(&data1 == ptr); 
+	queue_destroy(q); 
+	
+}
 
 static int inc_item(queue_t q, void *data, void *arg)
 {
@@ -160,6 +246,23 @@ static int find_item(queue_t q, void *data, void *arg)
         return 1;
 
     return 0;
+}
+
+void test_queue_iterator_errors(void) {
+	queue_t q = NULL;
+	int data1 = 1; 
+	int* ptr;
+
+	fprintf(stderr, "*** TEST queue_iterator_errors ***\n");
+
+	q = queue_create(); 
+	int result1 = queue_iterate(q, inc_item, (void*)1, NULL); 
+	TEST_ASSERT(result1 == -1); 
+	queue_enqueue(q, &data1); 
+	int result2 = queue_iterate(q, NULL, (void*)1, NULL);
+	TEST_ASSERT(result2 == -1); 
+	queue_dequeue(q, (void**)&ptr);
+	queue_destroy(q); 
 }
 
 void test_iterator(void)
@@ -191,12 +294,18 @@ void test_iterator(void)
 
 int main(void)
 {
-	test_create();
-	test_queue_simple();
-	test_queue_difficult();
-	test_queue_moderate(); 
-	test_queue_destroy_errors(); 
-	queue_enqueue_errors(); 
-	queue_dequeue_errors(); 
+	//test_create();
+	//test_queue_simple();
+	//test_queue_difficult();
+	//test_queue_moderate(); 
+	//test_queue_destroy_errors(); 
+	//test_queue_enqueue_errors(); 
+	//test_queue_dequeue_errors(); 
+	test_queue_delete();
+	//test_iterator(); 
+	test_queue_delete_duplicates(); 
+	test_queue_delete_errors(); 
+	test_queue_delete_nothing(); 
+	test_queue_iterator_errors(); 
 	return 0;
 }
