@@ -22,7 +22,8 @@ struct thread {
 	uthread_ctx_t* context;
 	void* stackPointer; 
 	int state; 
-	int returnValue; 
+	int returnValue;
+	uthread_t dependsOn;  
 }; 
 
 struct scheduler {
@@ -34,6 +35,31 @@ struct scheduler {
 };
 
 struct scheduler scheduler;
+
+/* Helper Functions */
+static int findZombie(queue_t q, struct thread* thread, void *arg) {
+	
+	uthread_t argTid = (uthread_t)(long) arg;
+	if (thread->tid == argTid) {
+		return 1; 
+	}
+	return 0; 
+}
+
+static int findDependency(queue_t q, struct thread* thread, void *arg) {
+	uthread_t argTid = (uthread_t)(long) arg;
+	if (thread->dependsOn == argTid) {
+		return 1; 
+	}
+	return 0; 
+}
+
+void freeThread(struct thread* threadPtr) {
+	free(threadPtr->context); 
+	uthread_ctx_destroy_stack(threadPtr->stackPointer);
+	free(threadPtr);
+}
+
 
 int uthread_start(int preempt)
 {
@@ -113,9 +139,6 @@ int uthread_create(uthread_func_t func)
 void uthread_yield(void)
 {
 	
-	if (scheduler.activeThread->state == ZOMBIE_STATE) 
-		queue_enqueue(scheduler.zombieQueue, scheduler.activeThread); 
-
 	if (queue_length(scheduler.readyQueue) != 0) {
 		/* Dequeue the thread from the ready queue as the next thread */
 		struct thread* nextThread;
@@ -124,10 +147,9 @@ void uthread_yield(void)
 		nextThread->state = ACTIVE_STATE;
 
 		/* Enqueue the current active thread to the back of the queue */
-		if (scheduler.activeThread->state != ZOMBIE_STATE) {
-			scheduler.activeThread->state = READY_STATE; 
-			queue_enqueue(scheduler.readyQueue, scheduler.activeThread); 
-		} 
+		scheduler.activeThread->state = READY_STATE; 
+		queue_enqueue(scheduler.readyQueue, scheduler.activeThread); 
+		
 		
 		/* Context switches the context */
 		struct thread* activeThread = scheduler.activeThread; 
@@ -149,37 +171,75 @@ void uthread_exit(int retval)
 
 	if (scheduler.activeThread->state == ACTIVE_STATE) {
 		
+		/* Thread has finshed and needs become a zombie to be collected  */
 		scheduler.activeThread->state = ZOMBIE_STATE;
 
+		/* Set the return value into the thread and add to zombie queue*/
 		scheduler.activeThread->returnValue = retval; 
-		uthread_yield(); 
+		queue_enqueue(scheduler.zombieQueue, scheduler.activeThread); 
+
+		/* We need to find what thread was waiting for this thread to complete */
+		struct thread* blockedThread = NULL; 
+		queue_iterate(scheduler.blockQueue, findDependency, (uthread_t*)scheduler.activeThread->tid, &blockedThread);
+		
+		if (blockedThread != NULL) {
+			queue_delete(scheduler.blockQueue, blockedThread); 
+			queue_enqueue(scheduler.readyQueue, blockedThread); 
+		}
+
+		struct thread* nextThread = NULL;
+		queue_dequeue(scheduler.readyQueue, &nextThread);
+		nextThread->state = ACTIVE_STATE;
+
+		struct thread* activeThread = scheduler.activeThread; 
+		scheduler.activeThread = nextThread; 
+
+		uthread_ctx_switch(activeThread->context, nextThread->context); 
 	}
 	 
 }
 
 
+
+
+
 int uthread_join(uthread_t tid, int *retval)
 {
-	// main calls the threadjoin -> we see oh okay the tid is in readyqueue ;
-	uthread_yield(); 
-	while(1) 
-	{
+	/* First check the zombie queue for a specific tid */
+	struct thread* storage = NULL; 
+	/* Go through the zombie queue and look for the tid, if it is there, it saves to storage */
+	/* Otherwise, if it is not there, it does not save to storage */
+	queue_iterate(scheduler.zombieQueue, findZombie, (uthread_t*)tid, &storage); 
 
-		//is the ready queue -> we block ourself we wait until our tid is in the zombie queue so we can delete it
-		//or its zombie queue 
+	/* If there is something in the zombie queue, that means the thread finished */
+	if (storage != NULL) {
 
-		// Checks if it is in the zombie queue 
-		// If it is, break 
+		/* Set the return value, delete from zombiequeue, and free everything */
+		*retval = storage->returnValue; 
+		queue_delete(scheduler.zombieQueue, storage); 
+		freeThread(storage); 
+	} else {
+		/* It is not in the zombie queue, we put the active thread into a blocking queue */
+		scheduler.activeThread->state = BLOCK_STATE; 
+
+		/* The active thread now depends on the tid given */
+		scheduler.activeThread->dependsOn = tid; 
+
+		/* Enqueues into the block */
+		queue_enqueue(scheduler.blockQueue, scheduler.activeThread); 
 		uthread_yield(); 
+		
+		/* The thread gets unblocked here */
+		struct thread* newStorage = NULL; 
+
+		/* Iterate through and find the thread that is finished */
+		queue_iterate(scheduler.zombieQueue, findZombie, (uthread_t*)tid, &newStorage); 
+
+		/* Set the return value, delete from zombiequeue, and free everything */
+		*retval = newStorage->returnValue; 
+		queue_delete(scheduler.zombieQueue, newStorage); 
+		freeThread(newStorage);
 	}
-	// It is in the zombie queue 
-	/*
-		Iterate through queue and get the data
-		Save the return value 
-		Unblock the parent 
-		Delete the node in the zombie queue 
-		uthread_yield(); 
-	*/
 	
-	return -1;
+	return SUCCESS;
 }
