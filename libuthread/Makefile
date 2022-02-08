@@ -1,12 +1,16 @@
 # Target library
 target := libuthread.a
-objs:= queue.o 
+objs:= context.o preempt.o uthread.o queue.o 
 # Flags
 CC  := gcc
 CFLAGS := -Wall -Wextra -Werror -MMD
-CFLAGS += -g 
 AR  := ar rcs 
 
+ifneq ($(D),1)
+CFLAGS	+= -O2
+else
+CFLAGS	+= -g
+endif
 
 ifneq ($(V),1)
 Q = @
