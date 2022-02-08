@@ -104,7 +104,10 @@ int uthread_stop(void)
 		/* Free the queues */
 		queue_destroy(scheduler.readyQueue); 
 		queue_destroy(scheduler.blockQueue);
-		queue_destroy(scheduler.zombieQueue);
+		
+		/* If there is something in the zombie queue, we free all of the nodes first */
+		while (queue_destroy(scheduler.zombieQueue)) 
+			queue_dequeue(scheduler.zombieQueue, NULL);
 		
 		return SUCCESS;
 	}
@@ -232,14 +235,21 @@ int uthread_join(uthread_t tid, int *retval)
 
 		/* Enqueues into the block */
 		queue_enqueue(scheduler.blockQueue, scheduler.activeThread); 
-		uthread_yield(); 
-		
+
+		struct thread* nextThread = NULL;
+		queue_dequeue(scheduler.readyQueue, (void**)&nextThread);
+		nextThread->state = ACTIVE_STATE;	
+		struct thread* activeThread = scheduler.activeThread; 
+		scheduler.activeThread = nextThread; 
+
+		uthread_ctx_switch(activeThread->context, nextThread->context); 
+			
 		/* The thread gets unblocked here */
 		struct thread* newStorage = NULL; 
 
 		/* Iterate through and find the thread that is finished */
 		queue_iterate(scheduler.zombieQueue, findZombie, (void*)((long) tid), (void**)&newStorage); 
-
+		
 		/* Set the return value, delete from zombiequeue, and free everything */
 		if (retval != NULL) 
 			*retval = newStorage->returnValue; 
