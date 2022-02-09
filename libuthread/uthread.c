@@ -27,6 +27,7 @@ struct thread {
 }; 
 
 struct scheduler {
+	int preempt; 
 	int threadCounter; 
 	queue_t readyQueue;  
 	queue_t zombieQueue; 
@@ -68,8 +69,11 @@ void freeThread(struct thread* threadPtr) {
 
 int uthread_start(int preempt)
 {
-	if (preempt == 0) {
-
+	scheduler.preempt = 0; 
+	if (preempt) {
+		scheduler.preempt = preempt; 
+		preempt_start();
+		preempt_disable();
 	} 
 	/* Initialize the queue */
 	queue_t readyQueue = queue_create();
@@ -89,11 +93,17 @@ int uthread_start(int preempt)
 	mainThread->state = ACTIVE_STATE; 
 	scheduler.activeThread = mainThread;
 
+	if (scheduler.preempt) 
+		preempt_enable(); 
+
 	return SUCCESS;
 }
 
 int uthread_stop(void)
 {	
+	if (scheduler.preempt) 
+		preempt_disable(); 
+
 	if(queue_length(scheduler.readyQueue) == 0 && scheduler.activeThread->tid == 0){
 
 		/* Free the current thread */
@@ -104,8 +114,15 @@ int uthread_stop(void)
 		/* Free the queues */
 		queue_destroy(scheduler.readyQueue); 
 		queue_destroy(scheduler.blockQueue);
-		queue_destroy(scheduler.zombieQueue);
 		
+		/* If there is something in the zombie queue, we free all of the nodes first */
+		struct thread* someThread; 
+		while (queue_destroy(scheduler.zombieQueue)) 
+			queue_dequeue(scheduler.zombieQueue, (void**)&someThread);
+		
+		if (scheduler.preempt)
+			preempt_stop(); 
+
 		return SUCCESS;
 	}
 	
@@ -115,6 +132,9 @@ int uthread_stop(void)
 int uthread_create(uthread_func_t func)
 {
 	/* Creates new thread struct */
+	if (scheduler.preempt)
+		preempt_disable(); 
+
 	struct thread* newThread = malloc(sizeof(struct thread));
 	if (newThread == NULL)
 		return ERROR;    
@@ -140,6 +160,9 @@ int uthread_create(uthread_func_t func)
 	/* Enqueues the thread to the ready queue */
 	queue_enqueue(scheduler.readyQueue, newThread);  
 	
+	if (scheduler.preempt)
+		preempt_enable(); 
+
 	return newThread->tid;
 
 }
@@ -149,6 +172,9 @@ void uthread_yield(void)
 	
 	if (queue_length(scheduler.readyQueue) != 0) {
 		/* Dequeue the thread from the ready queue as the next thread */
+		if (scheduler.preempt)
+			preempt_disable();
+
 		struct thread* nextThread;
 		 
 		queue_dequeue(scheduler.readyQueue, (void**)&nextThread);
@@ -163,8 +189,11 @@ void uthread_yield(void)
 		struct thread* activeThread = scheduler.activeThread; 
 		scheduler.activeThread = nextThread; 
 
+		if (scheduler.preempt)
+			preempt_enable();
+		
 		uthread_ctx_switch(activeThread->context, nextThread->context); 
-		 
+		
 	} 
 
 }
@@ -178,6 +207,9 @@ void uthread_exit(int retval)
 {
 
 	if (scheduler.activeThread->state == ACTIVE_STATE) {
+		
+		if (scheduler.preempt)
+			preempt_disable();
 		
 		/* Thread has finshed and needs become a zombie to be collected  */
 		scheduler.activeThread->state = ZOMBIE_STATE;
@@ -202,6 +234,9 @@ void uthread_exit(int retval)
 		struct thread* activeThread = scheduler.activeThread; 
 		scheduler.activeThread = nextThread; 
 
+		if (scheduler.preempt)
+			preempt_enable();
+
 		uthread_ctx_switch(activeThread->context, nextThread->context); 
 	}
 	 
@@ -210,6 +245,8 @@ void uthread_exit(int retval)
 
 int uthread_join(uthread_t tid, int *retval)
 {
+	if (scheduler.preempt)
+		preempt_disable();
 	/* First check the zombie queue for a specific tid */
 	struct thread* storage = NULL; 
 	/* Go through the zombie queue and look for the tid, if it is there, it saves to storage */
@@ -232,19 +269,34 @@ int uthread_join(uthread_t tid, int *retval)
 
 		/* Enqueues into the block */
 		queue_enqueue(scheduler.blockQueue, scheduler.activeThread); 
-		uthread_yield(); 
-		
+
+		struct thread* nextThread = NULL;
+		queue_dequeue(scheduler.readyQueue, (void**)&nextThread);
+		nextThread->state = ACTIVE_STATE;	
+		struct thread* activeThread = scheduler.activeThread; 
+		scheduler.activeThread = nextThread; 
+
+		if (scheduler.preempt)
+			preempt_enable();
+
+		uthread_ctx_switch(activeThread->context, nextThread->context); 
+			
+		if (scheduler.preempt)
+			preempt_disable();	
 		/* The thread gets unblocked here */
 		struct thread* newStorage = NULL; 
 
 		/* Iterate through and find the thread that is finished */
 		queue_iterate(scheduler.zombieQueue, findZombie, (void*)((long) tid), (void**)&newStorage); 
-
+		
 		/* Set the return value, delete from zombiequeue, and free everything */
 		if (retval != NULL) 
 			*retval = newStorage->returnValue; 
 		queue_delete(scheduler.zombieQueue, newStorage); 
 		freeThread(newStorage);
+
+		if (scheduler.preempt)
+			preempt_enable();
 	}
 	
 	return SUCCESS;
