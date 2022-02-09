@@ -294,15 +294,15 @@ void test_iterator(void)
 
 int main(void)
 {
-	//test_create();
-	//test_queue_simple();
-	//test_queue_difficult();
-	//test_queue_moderate(); 
-	//test_queue_destroy_errors(); 
-	//test_queue_enqueue_errors(); 
-	//test_queue_dequeue_errors(); 
+	test_create();
+	test_queue_simple();
+	test_queue_difficult();
+	test_queue_moderate(); 
+	test_queue_destroy_errors(); 
+	test_queue_enqueue_errors(); 
+	test_queue_dequeue_errors(); 
 	test_queue_delete();
-	//test_iterator(); 
+	test_iterator(); 
 	test_queue_delete_duplicates(); 
 	test_queue_delete_errors(); 
 	test_queue_delete_nothing(); 
