@@ -9,18 +9,6 @@
 #include "private.h"
 #include "uthread.h"
 
-
-struct sigaction sa;
-sigset_t ss;
-struct itimerval timerOld, timerNew;
-
-void alarmHandler(void) {
-	uthread_yield();
-}
-
-// setup alarm handler
-
-
 /*
  * Frequency of preemption
  * 100Hz is 100 times per second
@@ -28,17 +16,26 @@ void alarmHandler(void) {
 #define HZ 100
 #define HZINMICRO 10000
 
+struct sigaction signalAction, signalActionOld;
+sigset_t signalSets;
+struct itimerval timerOld, timerNew;
+
+void alarmHandler(int signum) {
+	(void) signum; 
+	uthread_yield();
+}
+
 void preempt_start(void)
 {
-	sigemptyset(&ss);
-  	sigaddset(&ss, SIGVTALRM);
+	sigemptyset(&signalSets);
+  	sigaddset(&signalSets, SIGVTALRM);
 	/* Set up handler for alarm */
-	sa.sa_handler = alarmHandler;
-	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = 0;
-	sigaction(SIGVTALRM, &sa, NULL);
+	signalAction.sa_handler = alarmHandler;
+	sigemptyset(&signalAction.sa_mask);
+	signalAction.sa_flags = 0;
+	sigaction(SIGVTALRM, &signalAction, &signalActionOld);
 	
-	sigprocmask(SIG_BLOCK, &ss, NULL);
+	sigprocmask(SIG_BLOCK, &signalSets, NULL);
 	
   	timerNew.it_interval.tv_sec = 0;
 	timerNew.it_value.tv_sec = 0; 
@@ -49,16 +46,17 @@ void preempt_start(void)
 
 void preempt_stop(void)
 {
-	/* TODO */
+	sigaction(SIGVTALRM, &signalActionOld, NULL); 
+	setitimer(ITIMER_VIRTUAL, &timerOld, NULL);
 }
 
 void preempt_enable(void)
 {
-	sigprocmask(SIG_UNBLOCK, &ss, NULL);
+	sigprocmask(SIG_UNBLOCK, &signalSets, NULL);
 }
 
 void preempt_disable(void)
 {
-	sigprocmask(SIG_BLOCK, &ss, NULL);
+	sigprocmask(SIG_BLOCK, &signalSets, NULL);
 }
 
