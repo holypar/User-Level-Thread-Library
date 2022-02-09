@@ -16,10 +16,12 @@
 #define HZ 100
 #define HZINMICRO 10000
 
+/* Global variables for signals and timers */
 struct sigaction signalAction, signalActionOld;
 sigset_t signalSets;
 struct itimerval timerOld, timerNew;
 
+/* Handler to yield everytime there is a signal */
 void alarmHandler(int signum) {
 	(void) signum; 
 	uthread_yield();
@@ -35,8 +37,9 @@ void preempt_start(void)
 	signalAction.sa_flags = 0;
 	sigaction(SIGVTALRM, &signalAction, &signalActionOld);
 	
-	sigprocmask(SIG_BLOCK, &signalSets, NULL);
+	preempt_disable(); 
 	
+	/* Setting up the timer */
   	timerNew.it_interval.tv_sec = 0;
 	timerNew.it_value.tv_sec = 0; 
 	timerNew.it_interval.tv_usec = HZINMICRO;
@@ -46,17 +49,20 @@ void preempt_start(void)
 
 void preempt_stop(void)
 {
+	/* Restoring the sigaction signals and timer */
 	sigaction(SIGVTALRM, &signalActionOld, NULL); 
 	setitimer(ITIMER_VIRTUAL, &timerOld, NULL);
 }
 
 void preempt_enable(void)
 {
+	/* Unblocking the SIGVTARLM signal */
 	sigprocmask(SIG_UNBLOCK, &signalSets, NULL);
 }
 
 void preempt_disable(void)
 {
+	/* Blocking the SIGVTARLM signal */
 	sigprocmask(SIG_BLOCK, &signalSets, NULL);
 }
 

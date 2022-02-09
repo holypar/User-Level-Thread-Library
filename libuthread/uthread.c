@@ -16,6 +16,8 @@
 #define ZOMBIE_STATE 3   
 #define SUCCESS 0
 #define ERROR -1 
+#define FOUND 1
+#define NOTFOUND 0
 
 struct thread {
 	uthread_t tid; 
@@ -38,34 +40,47 @@ struct scheduler {
 struct scheduler scheduler;
 
 /* Helper Functions */
+
+/* Function to queue iterate through a zombie queue and find a specific tid */
 static int findZombie(queue_t q, void* thread, void *arg) {
+
 	struct thread* newThread = (struct thread*)thread; 
 	uthread_t argTid = (uthread_t)(long) arg;
-	(void)q; // unused
+	(void)q; 
 
+	/* 
+	If we find the tid matching the a thread in the zombie queue, 
+	we return back to queue iterate and let the function do the rest 
+	*/
 	if (newThread->tid == argTid) {
-		return 1; 
+		return FOUND; 
 	}
-	return 0; 
+	return NOTFOUND; 
 }
 
+/* Function to queue iterate through a blocked queue and find a specific tid */
 static int findDependency(queue_t q, void* thread, void *arg) {
+
 	struct thread* newThread = (struct thread*)thread; 
 	uthread_t argTid = (uthread_t)(long) arg;
-	(void)q; // unused
+	(void)q; 
 
+	/* 
+	If we find the dependency matching the a thread in the blocked queue, 
+	we return back to queue iterate and let the function do the rest 
+	*/
 	if (newThread->dependsOn == argTid) {
-		return 1; 
+		return FOUND; 
 	}
-	return 0; 
+	return NOTFOUND; 
 }
 
+/* Function to free a thread */
 void freeThread(struct thread* threadPtr) {
 	free(threadPtr->context); 
 	uthread_ctx_destroy_stack(threadPtr->stackPointer);
 	free(threadPtr);
 }
-
 
 int uthread_start(int preempt)
 {
@@ -80,6 +95,7 @@ int uthread_start(int preempt)
 	queue_t zombieQueue = queue_create(); 
 	queue_t blockQueue = queue_create(); 
 
+	/* Sets the queues in the scheduler */
 	scheduler.readyQueue = readyQueue;
 	scheduler.zombieQueue = zombieQueue; 
 	scheduler.blockQueue = blockQueue; 
@@ -131,10 +147,11 @@ int uthread_stop(void)
 
 int uthread_create(uthread_func_t func)
 {
-	/* Creates new thread struct */
+	
 	if (scheduler.preempt)
 		preempt_disable(); 
-
+	
+	/* Creates new thread struct */
 	struct thread* newThread = malloc(sizeof(struct thread));
 	if (newThread == NULL)
 		return ERROR;    
@@ -143,15 +160,17 @@ int uthread_create(uthread_func_t func)
 	void* topOfStack = uthread_ctx_alloc_stack();
 	if (topOfStack == NULL)
 		return ERROR; 
-	newThread->stackPointer = topOfStack;
-	scheduler.threadCounter = scheduler.threadCounter + 1; 
-	newThread->tid = scheduler.threadCounter - 1; 
-
+	
 	/* Creates context */
 	uthread_ctx_t* context = malloc(sizeof(uthread_ctx_t));
 	if (context == NULL)
 		return ERROR;
-	
+
+	/* Set the default values */
+	newThread->stackPointer = topOfStack;
+	scheduler.threadCounter = scheduler.threadCounter + 1; 
+	newThread->tid = scheduler.threadCounter - 1; 
+
 	/* Initializes contexts and stores it */
 	uthread_ctx_init(context, newThread->stackPointer, func);
 	newThread->context = context; 
@@ -169,14 +188,14 @@ int uthread_create(uthread_func_t func)
 
 void uthread_yield(void)
 {
-	
+	/* Enqueues the thread to the ready queue */
 	if (queue_length(scheduler.readyQueue) != 0) {
-		/* Dequeue the thread from the ready queue as the next thread */
+		
 		if (scheduler.preempt)
 			preempt_disable();
 
 		struct thread* nextThread;
-		 
+		/* Dequeue the thread from the ready queue as the next thread */
 		queue_dequeue(scheduler.readyQueue, (void**)&nextThread);
 		nextThread->state = ACTIVE_STATE;
 
@@ -184,11 +203,11 @@ void uthread_yield(void)
 		scheduler.activeThread->state = READY_STATE; 
 		queue_enqueue(scheduler.readyQueue, scheduler.activeThread); 
 		
-		
-		/* Context switches the context */
+		/* Save the active thread and set it before context switching */
 		struct thread* activeThread = scheduler.activeThread; 
 		scheduler.activeThread = nextThread; 
 
+		/* Before context switching, we can turn preemption back on */
 		if (scheduler.preempt)
 			preempt_enable();
 		
@@ -220,17 +239,21 @@ void uthread_exit(int retval)
 
 		/* We need to find what thread was waiting for this thread to complete */
 		struct thread* blockedThread = NULL; 
-		queue_iterate(scheduler.blockQueue, findDependency, (void*)((long) scheduler.activeThread->tid), (void**)&blockedThread);
+		queue_iterate(scheduler.blockQueue, findDependency, 
+			(void*)((long) scheduler.activeThread->tid), (void**)&blockedThread);
 		
+		/* If a thread was waiting on us, we send it back to the ready queue */
 		if (blockedThread != NULL) {
 			queue_delete(scheduler.blockQueue, blockedThread); 
 			queue_enqueue(scheduler.readyQueue, blockedThread); 
 		}
 
+		/* Schedule the next thread to run */
 		struct thread* nextThread = NULL;
 		queue_dequeue(scheduler.readyQueue, (void**)&nextThread);
 		nextThread->state = ACTIVE_STATE;
 
+		/* Save the next thread and run it */
 		struct thread* activeThread = scheduler.activeThread; 
 		scheduler.activeThread = nextThread; 
 
@@ -241,7 +264,6 @@ void uthread_exit(int retval)
 	}
 	 
 }
-
 
 int uthread_join(uthread_t tid, int *retval)
 {
@@ -270,12 +292,15 @@ int uthread_join(uthread_t tid, int *retval)
 		/* Enqueues into the block */
 		queue_enqueue(scheduler.blockQueue, scheduler.activeThread); 
 
+		/* ESchedules the next thread to be run */
 		struct thread* nextThread = NULL;
 		queue_dequeue(scheduler.readyQueue, (void**)&nextThread);
 		nextThread->state = ACTIVE_STATE;	
+
 		struct thread* activeThread = scheduler.activeThread; 
 		scheduler.activeThread = nextThread; 
-
+		
+		/* Enable preemption before context switching */
 		if (scheduler.preempt)
 			preempt_enable();
 
@@ -283,6 +308,7 @@ int uthread_join(uthread_t tid, int *retval)
 			
 		if (scheduler.preempt)
 			preempt_disable();	
+
 		/* The thread gets unblocked here */
 		struct thread* newStorage = NULL; 
 

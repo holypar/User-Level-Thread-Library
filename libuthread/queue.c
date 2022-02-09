@@ -4,14 +4,30 @@
 
 #include "queue.h"
 
-#define ERROR -1;
-#define SUCCESS 0;
+/* Defining integers for Errors and Success results */
+#define ERROR -1
+#define SUCCESS 0
 
+/* Queue Implementation similar to a doubly linked list */
+
+/* 
+Structure for queues: 
+	pointer to the front, 
+	pointer to the back, 
+	length of the queue 
+*/
 struct queue {
 	struct node* front; 
 	struct node* end; 
 	int length; 
 };
+
+/* 
+Structure for nodes: 
+	pointer to the next node, 
+	pointer to the previous node, 
+	storage for data
+*/
 
 struct node {
 	struct node* next; 
@@ -19,10 +35,9 @@ struct node {
 	void* data; 
 };
 
-
 queue_t queue_create(void)
 {
-	// struct queue *myQueue = malloc(sizeof(*queue_t));
+	/* Mallocs the queue and sets the default values */
 	queue_t myQueue = (queue_t) malloc(sizeof(struct queue));
 	myQueue->front = NULL; 
 	myQueue->end = NULL; 
@@ -33,42 +48,43 @@ queue_t queue_create(void)
 
 int queue_destroy(queue_t queue)
 {
+	/* Give an error if the queue is not empty or is NULL, otherwise free it*/
 	if (queue->length > 0 || queue == NULL)
 		return ERROR;
-	
+
 	free(queue);
 	
 	return SUCCESS; 
 
 }
 
-int queue_enqueue(queue_t queue, void *data)    // 
+int queue_enqueue(queue_t queue, void *data)    
 {
 	/* Checks if queue or data is NULL */
 	if (queue == NULL || data == NULL) 
-		return -1;
-	 
+		return ERROR;
+	
+	/* Creates new node  */
+	struct node* newNode = malloc(sizeof(struct node)); 
+	newNode->next = NULL;
+	newNode->data = data;
+
+	/* Two cases: if the queue is empty or if the queue has nodes  */
 	if (queue->length == 0) {
-		/* Creates new node  */
-		struct node* newNode = malloc(sizeof(struct node)); 
-		newNode->next = NULL; 
-		newNode->prev = NULL;
-		newNode->data = data; 
+		/* If queue is empty, set the previous pointer to NULL */
+		newNode->prev = NULL; 
+
 		/* Sets the queue */
 		queue->front = newNode; 
 		queue->end = newNode; 
 		queue->length = 1; 
 	} else {
-		/* Creates new node  */
-		struct node* newNode = malloc(sizeof(struct node)); 
-		newNode->next = NULL;
-		newNode->data = data; 
 
-		/* Reroute the pointers */
+		/* Reroute the pointers of the end and new node */
 		newNode->prev = queue->end;
 		queue->end->next = newNode; 
 
-		/* Sets the queue */
+		/* Append the pointer to the end */
 		queue->end = newNode; 
 		queue->length = queue->length + 1; 
 	}
@@ -78,8 +94,9 @@ int queue_enqueue(queue_t queue, void *data)    //
 
 int queue_dequeue(queue_t queue, void **data)
 {
+	/* Checking for a potential error */
 	if (queue == NULL || data == NULL || queue->length == 0) 
-		return -1;
+		return ERROR;
 	
 	/* Saving the next node */
 	struct node* nextNode = queue->front->next; 
@@ -93,12 +110,13 @@ int queue_dequeue(queue_t queue, void **data)
 	if (nextNode != NULL)
 		nextNode->prev = NULL; 
 	queue->length = queue->length - 1;
+
 	return SUCCESS;
 }
 
 int queue_delete(queue_t queue, void *data)
 {
-	
+	/* Checking for a potential error */
 	if (queue == NULL || data == NULL || queue->length == 0) 
 		return -1;
 
@@ -111,9 +129,12 @@ int queue_delete(queue_t queue, void *data)
 			struct node* prevNode = currentNode->prev; 
 			struct node* nextNode = currentNode->next;  
 			
+			/* Next we handle edges cases */
+
 			/* If it is not the first item, reattach the pointer */
 			if (prevNode != NULL) 
 				prevNode->next = nextNode; 
+			
 			/* If it is not the last item reattach the pointer*/
 			if (nextNode != NULL)
 				nextNode->prev = prevNode; 
@@ -158,6 +179,8 @@ int queue_iterate(queue_t queue, queue_func_t func, void *arg, void **data)
 			*data = currentNode->data; 
 			break; 
 		}
+
+		/* Iterate through the linked list */
 		currentNode = currentNode->next;
 	}
 	
