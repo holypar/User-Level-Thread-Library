@@ -19,6 +19,7 @@
 #define FOUND 1
 #define NOTFOUND 0
 
+/* Struct for the thread */
 struct thread {
 	uthread_t tid; 
 	uthread_ctx_t* context;
@@ -28,6 +29,7 @@ struct thread {
 	uthread_t dependsOn;  
 }; 
 
+/* Struct for the scheduler */
 struct scheduler {
 	int preempt; 
 	int threadCounter; 
@@ -37,6 +39,7 @@ struct scheduler {
 	struct thread* activeThread; 
 };
 
+/* Defining a global scheduler shared across the threads */
 struct scheduler scheduler;
 
 /* Helper Functions */
@@ -82,14 +85,9 @@ void freeThread(struct thread* threadPtr) {
 	free(threadPtr);
 }
 
-int uthread_start(int preempt)
-{
-	scheduler.preempt = 0; 
-	if (preempt) {
-		scheduler.preempt = preempt; 
-		preempt_start();
-		preempt_disable();
-	} 
+/* Function to free a thread */
+void initializeQueues(void) {
+
 	/* Initialize the queue */
 	queue_t readyQueue = queue_create();
 	queue_t zombieQueue = queue_create(); 
@@ -101,13 +99,80 @@ int uthread_start(int preempt)
 	scheduler.blockQueue = blockQueue; 
 	scheduler.threadCounter = 1; 
 
-	/*Creation of main thread */
+}
+
+void createMainThread(void) {
+	/*Creation of main thread and set default values */
 	struct thread* mainThread = malloc(sizeof(struct thread)); 
 	mainThread->context = malloc(sizeof(uthread_ctx_t));
 	mainThread->stackPointer = uthread_ctx_alloc_stack();
 	mainThread->tid = scheduler.threadCounter - 1;
 	mainThread->state = ACTIVE_STATE; 
 	scheduler.activeThread = mainThread;
+}
+
+void blockActiveThread(uthread_t dependsOn) {
+	/* It is not in the zombie queue, we put the active thread into a blocking queue */
+	scheduler.activeThread->state = BLOCK_STATE; 
+
+	/* The active thread now depends on the tid given */
+	scheduler.activeThread->dependsOn = dependsOn; 
+
+	/* Enqueues into the block */
+	queue_enqueue(scheduler.blockQueue, scheduler.activeThread); 
+}
+
+void scheduleNextThread(void) {
+	/* Schedules the next thread to be run */
+	struct thread* nextThread = NULL;
+	queue_dequeue(scheduler.readyQueue, (void**)&nextThread);
+	nextThread->state = ACTIVE_STATE;	
+
+	struct thread* activeThread = scheduler.activeThread; 
+	scheduler.activeThread = nextThread; 
+	
+	/* Enable preemption before context switching */
+	if (scheduler.preempt)
+		preempt_enable();
+
+	uthread_ctx_switch(activeThread->context, nextThread->context); 
+
+}
+
+void freeActiveThread(void) {
+	/* Free the current thread */
+	free(scheduler.activeThread->context); 
+	uthread_ctx_destroy_stack(scheduler.activeThread->stackPointer); 
+	free(scheduler.activeThread); 
+}
+
+void freeQueues(void) {
+	/* Free the queues */
+	queue_destroy(scheduler.readyQueue); 
+	queue_destroy(scheduler.blockQueue);
+		
+	/* 
+	If there is something in the zombie queue, 
+	we free all of the nodes first 
+	*/
+	struct thread* someThread; 
+	while (queue_destroy(scheduler.zombieQueue)) 
+		queue_dequeue(scheduler.zombieQueue, (void**)&someThread);
+}
+
+int uthread_start(int preempt)
+{
+	scheduler.preempt = 0; 
+	if (preempt) {
+		scheduler.preempt = preempt; 
+		preempt_start();
+		preempt_disable();
+	} 
+	
+	/* See helper functions */
+	initializeQueues(); 
+	
+	createMainThread(); 
 
 	if (scheduler.preempt) 
 		preempt_enable(); 
@@ -120,21 +185,13 @@ int uthread_stop(void)
 	if (scheduler.preempt) 
 		preempt_disable(); 
 
-	if(queue_length(scheduler.readyQueue) == 0 && scheduler.activeThread->tid == 0){
+	if(queue_length(scheduler.readyQueue) == 0 
+	&& scheduler.activeThread->tid == 0) {
 
-		/* Free the current thread */
-		free(scheduler.activeThread->context); 
-		uthread_ctx_destroy_stack(scheduler.activeThread->stackPointer); 
-		free(scheduler.activeThread); 
+		/* See helper functions */
+		freeActiveThread(); 
 
-		/* Free the queues */
-		queue_destroy(scheduler.readyQueue); 
-		queue_destroy(scheduler.blockQueue);
-		
-		/* If there is something in the zombie queue, we free all of the nodes first */
-		struct thread* someThread; 
-		while (queue_destroy(scheduler.zombieQueue)) 
-			queue_dequeue(scheduler.zombieQueue, (void**)&someThread);
+		freeQueues(); 
 		
 		if (scheduler.preempt)
 			preempt_stop(); 
@@ -240,7 +297,8 @@ void uthread_exit(int retval)
 		/* We need to find what thread was waiting for this thread to complete */
 		struct thread* blockedThread = NULL; 
 		queue_iterate(scheduler.blockQueue, findDependency, 
-			(void*)((long) scheduler.activeThread->tid), (void**)&blockedThread);
+			(void*)((long) scheduler.activeThread->tid), 
+			(void**)&blockedThread);
 		
 		/* If a thread was waiting on us, we send it back to the ready queue */
 		if (blockedThread != NULL) {
@@ -248,21 +306,8 @@ void uthread_exit(int retval)
 			queue_enqueue(scheduler.readyQueue, blockedThread); 
 		}
 
-		/* Schedule the next thread to run */
-		struct thread* nextThread = NULL;
-		queue_dequeue(scheduler.readyQueue, (void**)&nextThread);
-		nextThread->state = ACTIVE_STATE;
-
-		/* Save the next thread and run it */
-		struct thread* activeThread = scheduler.activeThread; 
-		scheduler.activeThread = nextThread; 
-
-		if (scheduler.preempt)
-			preempt_enable();
-
-		uthread_ctx_switch(activeThread->context, nextThread->context); 
+		scheduleNextThread(); 
 	}
-	 
 }
 
 int uthread_join(uthread_t tid, int *retval)
@@ -283,28 +328,10 @@ int uthread_join(uthread_t tid, int *retval)
 		queue_delete(scheduler.zombieQueue, storage); 
 		freeThread(storage); 
 	} else {
-		/* It is not in the zombie queue, we put the active thread into a blocking queue */
-		scheduler.activeThread->state = BLOCK_STATE; 
-
-		/* The active thread now depends on the tid given */
-		scheduler.activeThread->dependsOn = tid; 
-
-		/* Enqueues into the block */
-		queue_enqueue(scheduler.blockQueue, scheduler.activeThread); 
-
-		/* ESchedules the next thread to be run */
-		struct thread* nextThread = NULL;
-		queue_dequeue(scheduler.readyQueue, (void**)&nextThread);
-		nextThread->state = ACTIVE_STATE;	
-
-		struct thread* activeThread = scheduler.activeThread; 
-		scheduler.activeThread = nextThread; 
 		
-		/* Enable preemption before context switching */
-		if (scheduler.preempt)
-			preempt_enable();
+		blockActiveThread(tid); 
 
-		uthread_ctx_switch(activeThread->context, nextThread->context); 
+		scheduleNextThread(); 
 			
 		if (scheduler.preempt)
 			preempt_disable();	
