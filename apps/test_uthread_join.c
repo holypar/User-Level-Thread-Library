@@ -25,8 +25,9 @@ int main(void) {
 
     uthread_start(0);    
     t1 = uthread_create(thread1);
-    uthread_join(t1,NULL);
+    uthread_join(t1, NULL);
     printf("This is main\n");
+    uthread_stop(); 
     
     return 0;
 

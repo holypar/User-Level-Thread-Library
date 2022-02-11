@@ -156,8 +156,11 @@ void freeQueues(void) {
 	we free all of the nodes first 
 	*/
 	struct thread* someThread; 
-	while (queue_destroy(scheduler.zombieQueue)) 
+	while (queue_destroy(scheduler.zombieQueue)) {
 		queue_dequeue(scheduler.zombieQueue, (void**)&someThread);
+		freeThread(someThread); 
+	}
+		
 }
 
 int uthread_start(int preempt)
